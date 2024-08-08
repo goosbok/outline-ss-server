@@ -14,4 +14,4 @@ keys:
     cipher: chacha20-ietf-poly1305
     secret: Secret2
     
-max_sessions: 2
+max_sessions: 1
