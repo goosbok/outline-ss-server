@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/ipinfo"
-	"github.com/Jigsaw-Code/outline-ss-server/service"
+	"github.com/goosbok/outline-ss-server/ipinfo"
+	"github.com/goosbok/outline-ss-server/service"
 	"github.com/op/go-logging"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -203,7 +203,7 @@ type Config struct {
 		Cipher string
 		Secret string
 	}
-	MaxSessions int	`yaml:"max_sessions"`
+	MaxSessions int `yaml:"max_sessions"`
 }
 
 func readConfig(filename string) (*Config, error) {

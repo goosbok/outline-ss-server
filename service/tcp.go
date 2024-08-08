@@ -29,9 +29,9 @@ import (
 
 	"github.com/Jigsaw-Code/outline-sdk/transport"
 	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/ipinfo"
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
-	"github.com/Jigsaw-Code/outline-ss-server/service/metrics"
+	"github.com/goosbok/outline-ss-server/ipinfo"
+	onet "github.com/goosbok/outline-ss-server/net"
+	"github.com/goosbok/outline-ss-server/service/metrics"
 	logging "github.com/op/go-logging"
 	"github.com/shadowsocks/go-shadowsocks2/socks"
 )
@@ -180,21 +180,21 @@ func NewShadowsocksStreamAuthenticator(ciphers CipherList, replayCache *ReplayCa
 }
 
 type tcpHandler struct {
-	listenerId   string
-	m            TCPMetrics
-	readTimeout  time.Duration
-	authenticate StreamAuthenticateFunc
-	dialer       transport.StreamDialer
+	listenerId     string
+	m              TCPMetrics
+	readTimeout    time.Duration
+	authenticate   StreamAuthenticateFunc
+	dialer         transport.StreamDialer
 	sessionCounter map[string]int
 }
 
 // NewTCPService creates a TCPService
 func NewTCPHandler(authenticate StreamAuthenticateFunc, m TCPMetrics, timeout time.Duration, sessionCounter map[string]int) TCPHandler {
 	return &tcpHandler{
-		m:            m,
-		readTimeout:  timeout,
-		authenticate: authenticate,
-		dialer:       defaultDialer,
+		m:              m,
+		readTimeout:    timeout,
+		authenticate:   authenticate,
+		dialer:         defaultDialer,
 		sessionCounter: sessionCounter,
 	}
 }
