@@ -1,7 +1,8 @@
-module github.com/Jigsaw-Code/outline-ss-server
+module github.com/goosbok/outline-ss-server
 
 require (
 	github.com/Jigsaw-Code/outline-sdk v0.0.14
+	github.com/Jigsaw-Code/outline-ss-server v1.5.0
 	github.com/go-task/task/v3 v3.34.1
 	github.com/google/go-licenses v1.6.0
 	github.com/goreleaser/goreleaser v1.18.2
