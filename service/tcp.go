@@ -77,6 +77,23 @@ func debugTCP(cipherID, template string, val interface{}) {
 // required = saltSize + 2 + cipher.TagSize, the number of bytes needed to authenticate the connection.
 const bytesForKeyFinding = 50
 
+func findAccessKeyWithSessionBrake(clientReader io.Reader, clientIP netip.Addr, cipherList CipherList, sessionCounter map[string]int, maxSessions int) (*CipherEntry, io.Reader, []byte, time.Duration, error) {
+	// We snapshot the list because it may be modified while we use it.
+
+	cipherEntry, clientReader, clientSalt, timeToCipher, keyErr := findAccessKey(clientReader, clientIP, cipherList)
+	if cipherEntry != nil {
+		sessionCount, exists := sessionCounter[cipherEntry.ID]
+		if !exists {
+			sessionCounter[cipherEntry.ID] = 1
+		} else if sessionCount >= maxSessions {
+			return nil, clientReader, nil, timeToCipher, fmt.Errorf("too many sessions")
+		} else {
+			sessionCounter[cipherEntry.ID]++
+		}
+	}
+	return cipherEntry, clientReader, clientSalt, timeToCipher, keyErr
+}
+
 func findAccessKey(clientReader io.Reader, clientIP netip.Addr, cipherList CipherList) (*CipherEntry, io.Reader, []byte, time.Duration, error) {
 	// We snapshot the list because it may be modified while we use it.
 	ciphers := cipherList.SnapshotForClientIP(clientIP)
@@ -127,10 +144,11 @@ type ShadowsocksTCPMetrics interface {
 
 // NewShadowsocksStreamAuthenticator creates a stream authenticator that uses Shadowsocks.
 // TODO(fortuna): Offer alternative transports.
-func NewShadowsocksStreamAuthenticator(ciphers CipherList, replayCache *ReplayCache, metrics ShadowsocksTCPMetrics) StreamAuthenticateFunc {
+func NewShadowsocksStreamAuthenticator(ciphers CipherList, replayCache *ReplayCache, metrics ShadowsocksTCPMetrics, sessionCounter map[string]int, maxSessions int) StreamAuthenticateFunc {
 	return func(clientConn transport.StreamConn) (string, transport.StreamConn, *onet.ConnectionError) {
 		// Find the cipher and acess key id.
-		cipherEntry, clientReader, clientSalt, timeToCipher, keyErr := findAccessKey(clientConn, remoteIP(clientConn), ciphers)
+		// cipherEntry, clientReader, clientSalt, timeToCipher, keyErr := findAccessKey(clientConn, remoteIP(clientConn), ciphers)
+		cipherEntry, clientReader, clientSalt, timeToCipher, keyErr := findAccessKeyWithSessionBrake(clientConn, remoteIP(clientConn), ciphers, sessionCounter, maxSessions)
 		metrics.AddTCPCipherSearch(keyErr == nil, timeToCipher)
 		if keyErr != nil {
 			const status = "ERR_CIPHER"
@@ -167,15 +185,17 @@ type tcpHandler struct {
 	readTimeout  time.Duration
 	authenticate StreamAuthenticateFunc
 	dialer       transport.StreamDialer
+	sessionCounter map[string]int
 }
 
 // NewTCPService creates a TCPService
-func NewTCPHandler(authenticate StreamAuthenticateFunc, m TCPMetrics, timeout time.Duration) TCPHandler {
+func NewTCPHandler(authenticate StreamAuthenticateFunc, m TCPMetrics, timeout time.Duration, sessionCounter map[string]int) TCPHandler {
 	return &tcpHandler{
 		m:            m,
 		readTimeout:  timeout,
 		authenticate: authenticate,
 		dialer:       defaultDialer,
+		sessionCounter: sessionCounter,
 	}
 }
 
@@ -265,7 +285,6 @@ func (h *tcpHandler) Handle(ctx context.Context, clientConn transport.StreamConn
 	connStart := time.Now()
 
 	id, connError := h.handleConnection(ctx, measuredClientConn, &proxyMetrics)
-
 	connDuration := time.Since(connStart)
 	status := "OK"
 	if connError != nil {
@@ -274,6 +293,7 @@ func (h *tcpHandler) Handle(ctx context.Context, clientConn transport.StreamConn
 	}
 	h.m.AddClosedTCPConnection(clientInfo, clientConn.RemoteAddr(), id, status, proxyMetrics, connDuration)
 	measuredClientConn.Close() // Closing after the metrics are added aids integration testing.
+	h.sessionCounter[id]--
 	logger.Debugf("Done with status %v, duration %v", status, connDuration)
 }
 

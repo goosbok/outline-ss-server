@@ -71,7 +71,8 @@ type SSServer struct {
 	ports       map[int]*ssPort
 }
 
-func (s *SSServer) startPort(portNum int) error {
+func (s *SSServer) startPort(portNum int, maxSessions int) error {
+	sessionCounter := map[string]int{}
 	listener, err := net.ListenTCP("tcp", &net.TCPAddr{Port: portNum})
 	if err != nil {
 		//lint:ignore ST1005 Shadowsocks is capitalized.
@@ -85,9 +86,9 @@ func (s *SSServer) startPort(portNum int) error {
 	}
 	logger.Infof("Shadowsocks UDP service listening on %v", packetConn.LocalAddr().String())
 	port := &ssPort{tcpListener: listener, packetConn: packetConn, cipherList: service.NewCipherList()}
-	authFunc := service.NewShadowsocksStreamAuthenticator(port.cipherList, &s.replayCache, s.m)
+	authFunc := service.NewShadowsocksStreamAuthenticator(port.cipherList, &s.replayCache, s.m, sessionCounter, maxSessions)
 	// TODO: Register initial data metrics at zero.
-	tcpHandler := service.NewTCPHandler(authFunc, s.m, tcpReadTimeout)
+	tcpHandler := service.NewTCPHandler(authFunc, s.m, tcpReadTimeout, sessionCounter)
 	packetHandler := service.NewPacketHandler(s.natTimeout, port.cipherList, s.m)
 	s.ports[portNum] = port
 	go service.StreamServe(service.WrapStreamListener(listener.AcceptTCP), tcpHandler.Handle)
@@ -147,7 +148,7 @@ func (s *SSServer) loadConfig(filename string) error {
 				return fmt.Errorf("failed to remove port %v: %w", portNum, err)
 			}
 		} else if count == +1 {
-			if err := s.startPort(portNum); err != nil {
+			if err := s.startPort(portNum, config.MaxSessions); err != nil {
 				return err
 			}
 		}
@@ -202,6 +203,7 @@ type Config struct {
 		Cipher string
 		Secret string
 	}
+	MaxSessions int	`yaml:"max_sessions"`
 }
 
 func readConfig(filename string) (*Config, error) {
